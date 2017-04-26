@@ -23,7 +23,7 @@ public class Server {
     new Server().go();
   }
 
-  public Server() throws IOException {
+  private Server() throws IOException {
     threadGroup = Executors.newFixedThreadPool(2);
     AsynchronousChannelGroup channelGroup = AsynchronousChannelGroup.withThreadPool(threadGroup);
     serverChannel = AsynchronousServerSocketChannel.open(channelGroup);
@@ -42,7 +42,7 @@ public class Server {
     serverChannel.accept(attachment1, new AcceptCompletionHandler());
     try {
       currentThread.join();
-    } catch (InterruptedException e) {
+    } catch (InterruptedException ignored) {
     }
     System.out.println("Exiting the server");
   }
@@ -63,7 +63,7 @@ public class Server {
 
     @Override
     public void failed(Throwable exc, String attachment) {
-      System.err.println(attachment + " - handler failed");
+      System.err.println(attachment + " - accept failed");
       exc.printStackTrace();
       currentThread.interrupt();
     }
@@ -86,6 +86,10 @@ public class Server {
       String message = new String(buffer);
       System.out.println("Received message from client: " + message);
 
+      // Echo the message back to client
+      ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
+      channel.write(outputBuffer);
+
       if (message.equals("Bye")) {
         if (!threadGroup.isTerminated()) {
           System.out.println("Terminating the group...");
@@ -98,10 +102,6 @@ public class Server {
           }
           currentThread.interrupt();
         }
-      } else {
-        // Echo the message back to client
-        ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
-        channel.write(outputBuffer);
       }
 
       ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
@@ -110,7 +110,7 @@ public class Server {
 
     @Override
     public void failed(Throwable exc, String attachment) {
-      System.err.println(attachment + " - handler failed");
+      System.err.println(attachment + " - read failed");
       exc.printStackTrace();
       currentThread.interrupt();
     }

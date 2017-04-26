@@ -21,17 +21,30 @@ public class Client {
     future.get();
 
     System.out.println("Client is started: " + socketChannel.isOpen());
-    System.out.print("Sending message to server: ");
 
     String[] messages = new String[] {"Time goes fast.", "What now?", "Bye"};
+    ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
     for (String message : messages) {
       ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
       Future result = socketChannel.write(buffer);
-      while (!result.isDone()) {
-        System.out.println("... ");
+      while (true) {
+        if (result.isDone()) break;
       }
+      System.out.print("Send: ");
       System.out.println(message);
       buffer.clear();
+
+      result = socketChannel.read(inputBuffer);
+      while (true) {
+        if (result.isDone()) break;
+      }
+      byte[] buf = new byte[inputBuffer.position()];
+      inputBuffer.rewind();
+      inputBuffer.get(buf);
+      System.out.print("Receive: ");
+      System.out.println(new String(buf));
+      inputBuffer.clear();
+
       Thread.sleep(3000);
     }
     socketChannel.close();
