@@ -86,11 +86,11 @@ public class Server {
       String message = new String(buffer);
       System.out.println("Received message from client: " + message);
 
-      // Echo the message back to client
-      ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
-      channel.write(outputBuffer);
-
       if (message.equals("Bye")) {
+        // Echo the message back to client
+        ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
+        channel.write(outputBuffer);
+
         if (!threadGroup.isTerminated()) {
           System.out.println("Terminating the group...");
           threadGroup.shutdown();
@@ -102,6 +102,10 @@ public class Server {
           }
           currentThread.interrupt();
         }
+      } else {
+        // Echo the message back to client
+        ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
+        channel.write(outputBuffer);
       }
 
       ByteBuffer inputBuffer = ByteBuffer.allocate(2048);

@@ -22,7 +22,7 @@ public class Client {
 
     System.out.println("Client is started: " + socketChannel.isOpen());
 
-    String[] messages = new String[] {"Time goes fast.", "What now?", "Bye"};
+    String[] messages = new String[] {"Time goes fast.", "What now?", "Meow", "Bye"};
     ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
     for (String message : messages) {
       ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
