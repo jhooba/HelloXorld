@@ -15,6 +15,8 @@ import java.util.concurrent.TimeUnit;
  * Created by jhooba on 2017-04-24.
  */
 public class Server implements Runnable {
+  private static final int THREAD_COUNT = 2;
+
   private final AsynchronousChannelGroup channelGroup;
   private final AsynchronousServerSocketChannel serverChannel;
   private Thread currentThread;
@@ -24,7 +26,7 @@ public class Server implements Runnable {
   }
 
   private Server() throws IOException {
-    channelGroup = AsynchronousChannelGroup.withFixedThreadPool(2, Executors.defaultThreadFactory());
+    channelGroup = AsynchronousChannelGroup.withFixedThreadPool(THREAD_COUNT, Executors.defaultThreadFactory());
     serverChannel = AsynchronousServerSocketChannel.open(channelGroup);
   }
 
@@ -37,8 +39,7 @@ public class Server implements Runnable {
     System.out.println("Server channel bound to port: " + hostAddress.getPort());
     System.out.println("Waiting for client to connect...");
 
-    String attachment1 = "First Connection";
-    serverChannel.accept(attachment1, new AcceptCompletionHandler());
+    serverChannel.accept(null, new AcceptCompletionHandler());
     ((Executor)channelGroup).execute(this);
     try {
       currentThread.join();
@@ -55,39 +56,41 @@ public class Server implements Runnable {
     }
   }
 
-  private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, String> {
+  private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, Object> {
     @Override
-    public void completed(AsynchronousSocketChannel result, String attachment) {
-      System.out.println("Completed: " + attachment);
+    public void completed(AsynchronousSocketChannel result, Object o) {
+      String remoteIp = null;
+      try {
+        remoteIp = result.getRemoteAddress().toString();
+      } catch (IOException ignored) {
+      }
+      System.out.println("Accepted: " + remoteIp);
       // accept the next connection
-      attachment = "Next Connection";
-      System.out.println("Waiting for - " + attachment);
-      serverChannel.accept(attachment, this);
+      System.out.println("Waiting for Next Connection");
+      serverChannel.accept(o, this);
 
       // handle this connection
       ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
-      result.read(inputBuffer, attachment, new ReadCompletionHandler(inputBuffer, result));
+      result.read(inputBuffer, inputBuffer, new ReadCompletionHandler(result));
     }
 
     @Override
-    public void failed(Throwable exc, String attachment) {
-      System.err.println(attachment + " - accept failed");
+    public void failed(Throwable exc, Object o) {
+      System.err.println("Accept failed");
 //      exc.printStackTrace();
       currentThread.interrupt();
     }
   }
 
-  private class ReadCompletionHandler implements CompletionHandler<Integer, String> {
-    private final ByteBuffer inputBuffer;
+  private class ReadCompletionHandler implements CompletionHandler<Integer, ByteBuffer> {
     private final AsynchronousSocketChannel channel;
 
-    ReadCompletionHandler(ByteBuffer inputBuffer, AsynchronousSocketChannel channel) {
-      this.inputBuffer = inputBuffer;
+    ReadCompletionHandler(AsynchronousSocketChannel channel) {
       this.channel = channel;
     }
 
     @Override
-    public void completed(Integer result, String attachment) {
+    public void completed(Integer result, ByteBuffer inputBuffer) {
       if (result < 0) {
         return;
       }
@@ -118,14 +121,13 @@ public class Server implements Runnable {
         ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
         channel.write(outputBuffer);
       }
-
-      ByteBuffer inputBuffer = ByteBuffer.allocate(2048);
-      channel.read(inputBuffer, attachment, new ReadCompletionHandler(inputBuffer, channel));
+      inputBuffer.clear();
+      channel.read(inputBuffer, inputBuffer, new ReadCompletionHandler(channel));
     }
 
     @Override
-    public void failed(Throwable exc, String attachment) {
-      System.err.println(attachment + " - read failed");
+    public void failed(Throwable exc, ByteBuffer inputBuffer) {
+      System.err.println("Read failed");
 //      exc.printStackTrace();
       currentThread.interrupt();
     }
