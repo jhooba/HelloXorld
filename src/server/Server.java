@@ -7,15 +7,15 @@ import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Created by jhooba on 2017-04-24.
  */
-public class Server {
-  private final ExecutorService threadGroup;
+public class Server implements Runnable {
+  private final AsynchronousChannelGroup channelGroup;
   private final AsynchronousServerSocketChannel serverChannel;
   private Thread currentThread;
 
@@ -24,8 +24,7 @@ public class Server {
   }
 
   private Server() throws IOException {
-    threadGroup = Executors.newFixedThreadPool(2);
-    AsynchronousChannelGroup channelGroup = AsynchronousChannelGroup.withThreadPool(threadGroup);
+    channelGroup = AsynchronousChannelGroup.withFixedThreadPool(2, Executors.defaultThreadFactory());
     serverChannel = AsynchronousServerSocketChannel.open(channelGroup);
   }
 
@@ -40,11 +39,20 @@ public class Server {
 
     String attachment1 = "First Connection";
     serverChannel.accept(attachment1, new AcceptCompletionHandler());
+    ((Executor)channelGroup).execute(this);
     try {
       currentThread.join();
     } catch (InterruptedException ignored) {
     }
     System.out.println("Exiting the server");
+  }
+
+  @Override
+  public void run() {
+    System.out.println("...");
+    if (!channelGroup.isShutdown()) {
+      ((Executor)channelGroup).execute(this);
+    }
   }
 
   private class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, String> {
@@ -64,7 +72,7 @@ public class Server {
     @Override
     public void failed(Throwable exc, String attachment) {
       System.err.println(attachment + " - accept failed");
-      exc.printStackTrace();
+//      exc.printStackTrace();
       currentThread.interrupt();
     }
   }
@@ -80,6 +88,9 @@ public class Server {
 
     @Override
     public void completed(Integer result, String attachment) {
+      if (result < 0) {
+        return;
+      }
       byte[] buffer = new byte[result];
       inputBuffer.rewind();  // Rewinds the input buffer to read from the beginning
       inputBuffer.get(buffer);
@@ -91,12 +102,12 @@ public class Server {
         ByteBuffer outputBuffer = ByteBuffer.wrap(buffer);
         channel.write(outputBuffer);
 
-        if (!threadGroup.isTerminated()) {
+        if (!channelGroup.isTerminated()) {
           System.out.println("Terminating the group...");
-          threadGroup.shutdown();
           try {
-            threadGroup.awaitTermination(10, TimeUnit.SECONDS);
-          } catch (InterruptedException e) {
+            channelGroup.shutdownNow();
+            channelGroup.awaitTermination(10, TimeUnit.SECONDS);
+          } catch (IOException | InterruptedException e) {
             System.err.println("Exception during group termination");
             e.printStackTrace();
           }
@@ -115,7 +126,7 @@ public class Server {
     @Override
     public void failed(Throwable exc, String attachment) {
       System.err.println(attachment + " - read failed");
-      exc.printStackTrace();
+//      exc.printStackTrace();
       currentThread.interrupt();
     }
   }
